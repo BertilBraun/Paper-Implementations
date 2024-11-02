@@ -41,15 +41,13 @@ This repository contains implementations of various research papers using PyTorc
 
 ### Adding a New Paper
 
-1. Create a new directory under `papers/`:
+To add a new paper implementation to this repository, run the `create_paper.py` script:
 
-    ```sh
-    mkdir papers/paper_name
-    ```
+```sh
+python create_paper.py
+```
 
-2. Add a `README.md` file with details about the paper and instructions to run the code.
-
-3. Implement the paper in the `src/` directory.
+It will prompt you to enter the paper's title and URL. The script will create a new directory in the `papers/` folder with the necessary structure.
 
 ## License
 

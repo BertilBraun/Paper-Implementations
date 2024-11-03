@@ -3,17 +3,15 @@ from tokenizers import Tokenizer
 
 from src.dataset import BOS_TOKEN, END_OF_SRC_TOKEN, END_OF_TGT_TOKEN
 from src.util import create_src_mask, create_tgt_mask
+from papers.attention_is_all_you_need.src.transformer import Transformer
 
 
 def generate_sequence(
-    model: torch.nn.Module,
+    model: Transformer,
     src_sequence: str,
     tokenizer: Tokenizer,
     max_length=50,
 ) -> str:
-    # TODO Sampling strategies: Beam search, Top-k sampling, Top-p sampling, etc.
-    # TODO Add temperature parameter for sampling
-    # TODO Add kv_cache for faster inference
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     model.eval()
@@ -48,7 +46,7 @@ if __name__ == '__main__':
     tokenizer = load_tokenizer(f'{data_dir}/tokenizer.json')
 
     model = Transformer(vocab_size=tokenizer.get_vocab_size(), d_model=512, N=6, heads=8, d_ff=2048)
-    model = load_latest_model(model, f'{data_dir}/checkpoints')
+    model: Transformer = load_latest_model(model, f'{data_dir}/checkpoints')  # type: ignore
 
     src_sequence = 'Once upon a time'
     generated_sequence = generate_sequence(model, src_sequence, tokenizer)

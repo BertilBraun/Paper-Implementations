@@ -1,11 +1,12 @@
-import os
-import re
-from typing import Callable
 import torch
 from torch.utils.data import DataLoader
 from tokenizers import Tokenizer
 from tqdm import tqdm
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+from typing import Callable
+
+from src.util import create_src_mask, create_tgt_mask, save_model
 
 
 def train_model(
@@ -44,7 +45,6 @@ def train_model(
         - Creates attention masks for both source and target sequences
         - Saves model checkpoint after each epoch
     """
-
     lr_scheduler = ReduceLROnPlateau(optimizer, factor=0.5, patience=10)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -52,22 +52,17 @@ def train_model(
     for epoch in range(epochs):
         model.train()
         total_loss = 0
-        for batch_idx, (src_batch, tgt_batch, src_mask) in tqdm(
-            enumerate(train_dataloader), total=len(train_dataloader), desc=f'Epoch {epoch+1}'
-        ):
+        for src_batch, tgt_batch in tqdm(train_dataloader, total=len(train_dataloader), desc=f'Epoch {epoch+1}'):
             src_batch = src_batch.to(device)
             tgt_batch = tgt_batch.to(device)
-            src_mask = src_mask.to(device)
 
             optimizer.zero_grad()
 
             tgt_input = tgt_batch[:, :-1]
             tgt_output = tgt_batch[:, 1:]
 
-            tgt_padding_mask = (tgt_input != tokenizer.token_to_id('<pad>')).unsqueeze(1).unsqueeze(2)
-            size = tgt_input.size(1)
-            tgt_subsequent_mask = torch.triu(torch.ones((1, size, size), device=device), diagonal=1).bool()
-            tgt_mask = tgt_padding_mask & ~tgt_subsequent_mask
+            src_mask = create_src_mask(src_batch, tokenizer, device)
+            tgt_mask = create_tgt_mask(tgt_input, tokenizer, device)
 
             outputs = model(src_batch, tgt_input, src_mask, tgt_mask)
             outputs = outputs.view(-1, outputs.size(-1))
@@ -82,93 +77,37 @@ def train_model(
         avg_loss = total_loss / len(train_dataloader)
         print(f'Epoch {epoch+1}, Average Training Loss {avg_loss:.4f}')
 
-        model.eval()
-        with torch.no_grad():
-            total_val_loss = 0
-            for src_batch, tgt_batch, src_mask in test_dataloader:
-                src_batch = src_batch.to(device)
-                tgt_batch = tgt_batch.to(device)
-                src_mask = src_mask.to(device)
-
-                tgt_input = tgt_batch[:, :-1]
-                tgt_output = tgt_batch[:, 1:]
-
-                tgt_padding_mask = (tgt_input != tokenizer.token_to_id('<pad>')).unsqueeze(1).unsqueeze(2)
-                size = tgt_input.size(1)
-                tgt_subsequent_mask = torch.triu(torch.ones((1, size, size), device=device), diagonal=1).bool()
-                tgt_mask = tgt_padding_mask & ~tgt_subsequent_mask
-
-                outputs = model(src_batch, tgt_input, src_mask, tgt_mask)
-                outputs = outputs.view(-1, outputs.size(-1))
-                tgt_output = tgt_output.contiguous().view(-1)
-
-                loss = loss_fn(outputs, tgt_output)
-                total_val_loss += loss.item()
-            avg_val_loss = total_val_loss / len(test_dataloader)
-            print(f'Epoch {epoch+1}, Average Validation Loss {avg_val_loss:.4f}')
+        avg_val_loss = evaluate(model, test_dataloader, loss_fn, tokenizer, device)
+        print(f'Epoch {epoch+1}, Average Validation Loss {avg_val_loss:.4f}')
 
         save_model(model, f'{checkpoint_path}/epoch_{epoch+1}.pth')
 
 
-def save_model(model: torch.nn.Module, path: str):
-    """
-    Save a PyTorch model's state dictionary to the specified path.
+def evaluate(
+    model: torch.nn.Module,
+    dataloader: DataLoader,
+    loss_fn: Callable,
+    tokenizer: Tokenizer,
+    device: torch.device,
+) -> float:
+    model.eval()
+    total_val_loss = 0.0
+    with torch.no_grad():
+        for src_batch, tgt_batch in dataloader:
+            src_batch = src_batch.to(device)
+            tgt_batch = tgt_batch.to(device)
 
-    This function saves the model's state dictionary to a file, creating the necessary
-    directories if they don't exist.
+            tgt_input = tgt_batch[:, :-1]
+            tgt_output = tgt_batch[:, 1:]
 
-    Args:
-        model (torch.nn.Module): The PyTorch model to save
-        path (str): The file path where the model should be saved
+            src_mask = create_src_mask(src_batch, tokenizer, device)
+            tgt_mask = create_tgt_mask(tgt_input, tokenizer, device)
 
-    Returns:
-        None
+            outputs = model(src_batch, tgt_input, src_mask, tgt_mask)
+            outputs = outputs.view(-1, outputs.size(-1))
+            tgt_output = tgt_output.contiguous().view(-1)
 
-    Examples:
-        >>> model = MyModel()
-        >>> save_model(model, 'models/my_model.pth')
-        Model saved: models/my_model.pth
-    """
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    torch.save(model.state_dict(), path)
-    print(f'Model saved: {path}')
-
-
-def load_model(model: torch.nn.Module, path: str) -> torch.nn.Module:
-    """Loads a PyTorch model's state dictionary from a file.
-    Args:
-        model (torch.nn.Module): The model architecture to load weights into.
-        path (str): Path to the saved model state dictionary file.
-    Returns:
-        torch.nn.Module: The model with loaded weights.
-    Example:
-        >>> model = MyModel()
-        >>> model = load_model(model, 'path/to/weights.pth')
-    """
-
-    model.load_state_dict(torch.load(path))
-    return model
-
-
-def load_latest_model(model: torch.nn.Module, checkpoint_dir: str) -> torch.nn.Module:
-    """Load the most recent model checkpoint from the given directory.
-
-    Args:
-        model: The model to load the state into
-        checkpoint_dir: Directory containing checkpoint files named 'epoch_X.pth'
-
-    Returns:
-        The model with loaded state
-    """
-    # Find checkpoint files and extract epoch numbers
-    checkpoint_pattern = re.compile(r'epoch_(\d+)\.pth')
-    epoch_numbers = [
-        int(match.group(1)) for file in os.listdir(checkpoint_dir) if (match := checkpoint_pattern.match(file))
-    ]
-
-    if not epoch_numbers:
-        raise FileNotFoundError(f'No checkpoint files found in {checkpoint_dir}')
-
-    latest_epoch = max(epoch_numbers)
-
-    return load_model(model, f'{checkpoint_dir}/epoch_{latest_epoch}.pth')
+            loss = loss_fn(outputs, tgt_output)
+            total_val_loss += loss.item()
+    avg_val_loss = total_val_loss / len(dataloader)
+    return avg_val_loss

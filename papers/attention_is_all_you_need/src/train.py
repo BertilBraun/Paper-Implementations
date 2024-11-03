@@ -2,7 +2,8 @@ import torch
 import datasets
 from torch import nn
 
-from src.train import load_latest_model, train_model
+from src.util import load_latest_model
+from src.train import train_model
 from src.dataset import get_tokenizer, prepare_dataloader
 from papers.attention_is_all_you_need.src.transformer import Transformer
 
@@ -24,13 +25,13 @@ d_ff = 2048
 N = 6
 heads = 8
 warmup_steps = 4000
-data_path = 'papers/transformer/data'
+data_path = 'papers/attention_is_all_you_need/data'
 checkpoint_path = f'{data_path}/checkpoints'
 
 
 print('Loading datasets...')
 train_dataset = load_dataset('train[:1000]')
-test_dataset = load_dataset('test[:1000]')
+test_dataset = load_dataset('test[:50]')
 
 print('Initializing tokenizer...')
 tokenizer = get_tokenizer(train_dataset, path=f'{data_path}/tokenizer.json')

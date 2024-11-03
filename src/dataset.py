@@ -56,6 +56,7 @@ def get_tokenizer(
                 yield batch
 
         tokenizer.train_from_iterator(batch_iterator(), trainer=trainer)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         tokenizer.save(path)
 
     return load_tokenizer(path)

@@ -1,12 +1,13 @@
+import math
 import torch
 from torch import nn
 
 
 class Transformer(nn.Module):
-    def __init__(self, vocab_size, d_model, N, heads, d_ff, dropout=0.1):
+    def __init__(self, vocab_size, d_model, N, heads, d_ff, max_len=512, dropout=0.1):
         super(Transformer, self).__init__()
-        self.encoder = Encoder(vocab_size, d_model, N, heads, d_ff, dropout)
-        self.decoder = Decoder(vocab_size, d_model, N, heads, d_ff, dropout)
+        self.encoder = Encoder(vocab_size, d_model, N, heads, d_ff, max_len, dropout)
+        self.decoder = Decoder(vocab_size, d_model, N, heads, d_ff, max_len, dropout)
         self.out = nn.Linear(d_model, vocab_size)
 
     def forward(self, src, trg, src_mask, tgt_mask):
@@ -20,9 +21,9 @@ class Transformer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, vocab_size, d_model, N, heads, d_ff, dropout=0.1):
+    def __init__(self, vocab_size, d_model, N, heads, d_ff, max_len, dropout):
         super(Encoder, self).__init__()
-        self.embed = TransformerEmbedding(d_model, vocab_size)
+        self.embed = TransformerEmbedding(d_model, vocab_size, max_len, dropout)
         self.layers = nn.ModuleList([EncoderLayer(d_model, heads, d_ff, dropout) for _ in range(N)])
 
     def forward(self, src, mask):
@@ -33,9 +34,9 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, d_model, N, heads, d_ff, dropout=0.1):
+    def __init__(self, vocab_size, d_model, N, heads, d_ff, max_len, dropout):
         super(Decoder, self).__init__()
-        self.embed = TransformerEmbedding(d_model, vocab_size)
+        self.embed = TransformerEmbedding(d_model, vocab_size, max_len, dropout)
         self.layers = nn.ModuleList([DecoderLayer(d_model, heads, d_ff, dropout) for _ in range(N)])
 
     def forward(self, trg, e_outputs, src_mask, tgt_mask):
@@ -46,7 +47,7 @@ class Decoder(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model, heads, d_ff, dropout=0.1):
+    def __init__(self, d_model, heads, d_ff, dropout):
         super(EncoderLayer, self).__init__()
         self.norm1 = LayerNorm(d_model)
         self.norm2 = LayerNorm(d_model)
@@ -55,7 +56,7 @@ class EncoderLayer(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
 
         self.self_attn = MultiHeadAttention(d_model, heads)
-        self.ff = PositionwiseFeedforward(d_model, d_ff)
+        self.ff = PositionwiseFeedforward(d_model, d_ff, dropout)
 
     def forward(self, x, mask):
         x = self.norm1(x + self.dropout1(self.self_attn(x, x, x, mask)))
@@ -64,7 +65,7 @@ class EncoderLayer(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model, heads, d_ff, dropout=0.1):
+    def __init__(self, d_model, heads, d_ff, dropout):
         super(DecoderLayer, self).__init__()
         self.norm1 = LayerNorm(d_model)
         self.norm2 = LayerNorm(d_model)
@@ -76,7 +77,7 @@ class DecoderLayer(nn.Module):
 
         self.self_attn = MultiHeadAttention(d_model, heads)
         self.cross_attn = MultiHeadAttention(d_model, heads)
-        self.ff = PositionwiseFeedforward(d_model, d_ff)
+        self.ff = PositionwiseFeedforward(d_model, d_ff, dropout)
 
     def forward(self, x, e_outputs, src_mask, tgt_mask):
         x = self.norm1(x + self.dropout1(self.self_attn(x, x, x, tgt_mask)))
@@ -97,7 +98,7 @@ class MultiHeadAttention(nn.Module):
         self.k_linear = nn.Linear(d_model, d_model)
         self.out = nn.Linear(d_model, d_model)
 
-        self.attention = ScaleDotProductAttention()
+        self.attention = ScaledDotProductAttention()
 
     def forward(self, q, k, v, mask=None):
         batch_size = q.size(0)
@@ -119,12 +120,11 @@ class MultiHeadAttention(nn.Module):
         return self.out(concat)
 
 
-class ScaleDotProductAttention(nn.Module):
+class ScaledDotProductAttention(nn.Module):
     def forward(self, q, k, v, mask=None):
         # Attention(Q, K, V) = softmax(QK^T / sqrt(d_k))V
         d_k = q.size(-1)
-        # Has to be a float tensor for the sqrt function to work, it expects a float tensor
-        attn = torch.matmul(q, k.transpose(-2, -1)) / torch.sqrt(torch.tensor(d_k).float())
+        attn = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
 
         if mask is not None:
             attn = attn.masked_fill(mask == 0, -1e9)
@@ -134,7 +134,7 @@ class ScaleDotProductAttention(nn.Module):
 
 
 class PositionwiseFeedforward(nn.Module):
-    def __init__(self, d_model, d_ff, dropout=0.1):
+    def __init__(self, d_model, d_ff, dropout):
         super(PositionwiseFeedforward, self).__init__()
         self.linear1 = nn.Linear(d_model, d_ff)
         self.dropout = nn.Dropout(dropout)
@@ -160,10 +160,10 @@ class LayerNorm(nn.Module):
 
 
 class TransformerEmbedding(nn.Module):
-    def __init__(self, d_model, vocab_size, dropout=0.1):
+    def __init__(self, d_model, vocab_size, max_len, dropout):
         super(TransformerEmbedding, self).__init__()
         self.embed = nn.Embedding(vocab_size, d_model)
-        self.pos_embed = PositionalEncoding(d_model)
+        self.pos_embed = PositionalEncoding(d_model, max_len)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
@@ -173,15 +173,14 @@ class TransformerEmbedding(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=512):
+    def __init__(self, d_model, max_len):
         super(PositionalEncoding, self).__init__()
         self.encoding = torch.zeros(max_len, d_model)
         for pos in range(max_len):
             for i in range(0, d_model, 2):
-                # Has to be a float tensor for the sin and cos functions to work, they expect float tensors
-                location = torch.tensor(pos / 10000 ** (i / d_model)).float()
-                self.encoding[pos, i] = torch.sin(location)
-                self.encoding[pos, i + 1] = torch.cos(location)
+                location = pos / 10000 ** (i / d_model)
+                self.encoding[pos, i] = math.sin(location)
+                self.encoding[pos, i + 1] = math.cos(location)
 
         # Add batch dimension. New shape: (1, max_len, d_model)
         self.encoding = self.encoding.unsqueeze(0)

@@ -103,19 +103,21 @@ class MultiHeadAttention(nn.Module):
     def forward(self, q, k, v, mask=None):
         batch_size = q.size(0)
 
-        q = self.q_linear(q)
-        k = self.k_linear(k)
-        v = self.v_linear(v)
+        q = self.q_linear(q)  # (batch_size, seq_len, d_model)
+        k = self.k_linear(k)  # (batch_size, seq_len, d_model)
+        v = self.v_linear(v)  # (batch_size, seq_len, d_model)
 
         # Split the d_model into h heads
-        q = q.view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
-        k = k.view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
-        v = v.view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
+        q = q.view(batch_size, -1, self.h, self.d_k).transpose(1, 2)  # (batch_size, h, seq_len, d_k)
+        k = k.view(batch_size, -1, self.h, self.d_k).transpose(1, 2)  # (batch_size, h, seq_len, d_k)
+        v = v.view(batch_size, -1, self.h, self.d_k).transpose(1, 2)  # (batch_size, h, seq_len, d_k)
 
-        scores, _ = self.attention(q, k, v, mask)
+        scores, _ = self.attention(q, k, v, mask)  # (batch_size, h, seq_len, d_k)
 
         # Concatenate the heads
-        concat = scores.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
+        concat = (
+            scores.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
+        )  # (batch_size, seq_len, d_model)
 
         return self.out(concat)
 

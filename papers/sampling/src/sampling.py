@@ -122,6 +122,10 @@ def beam_search(
     for _ in range(max_length):
         all_candidates = []
         for seq, score in sequences:
+            if seq[-1] == tokenizer.token_to_id(END_OF_TGT_TOKEN):
+                # If EOS token is generated, keep the sequence as is
+                all_candidates.append([seq, score])
+                continue
             with torch.no_grad():
                 input_seq = torch.tensor(seq, device=device).unsqueeze(0)
                 outputs = model(input_seq, mask=None)
@@ -140,8 +144,8 @@ def beam_search(
         ordered = sorted(all_candidates, key=lambda x: x[1])
         sequences = ordered[:beam_width]
 
-        # Check for end-of-sequence token
-        if any(seq[-1] == tokenizer.token_to_id(END_OF_TGT_TOKEN) for seq, _ in sequences):
+        # Check if the highest probability sequence ends with EOS token
+        if sequences[0][0][-1] == tokenizer.token_to_id(END_OF_TGT_TOKEN):
             break
 
     # Return the sequence with the highest score

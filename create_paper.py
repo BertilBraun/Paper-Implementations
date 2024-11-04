@@ -20,13 +20,14 @@ def main():
     os.makedirs(os.path.join(base_path, 'src'), exist_ok=True)
 
     # Download paper.pdf
-    response = requests.get(paper_link)
-    if response.status_code == 200:
-        with open(os.path.join(base_path, 'paper.pdf'), 'wb') as f:
-            f.write(response.content)
-        print('Downloaded paper.pdf')
-    else:
-        print('Failed to download paper.pdf')
+    if paper_link:
+        response = requests.get(paper_link)
+        if response.status_code == 200:
+            with open(os.path.join(base_path, 'paper.pdf'), 'wb') as f:
+                f.write(response.content)
+            print('Downloaded paper.pdf')
+        else:
+            print('Failed to download paper.pdf')
 
     # Create README.md
     readme_content = f"""# {paper_name}

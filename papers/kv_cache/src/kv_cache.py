@@ -1,19 +1,16 @@
-from dataclasses import dataclass
-import math
 import torch
 from torch import nn
 
+from papers.attention_is_all_you_need.src.transformer import (
+    ModelConfig,
+    PositionalEncoding,
+    PositionwiseFeedforward,
+    LayerNorm,
+    ScaledDotProductAttention,
+)
 
-@dataclass
-class ModelConfig:
-    vocab_size: int
-    d_model: int
-    N: int
-    heads: int
-    d_ff: int
-    max_batch_size: int = 64
-    max_len: int = 512
-    dropout: float = 0.1
+
+MAX_BATCH_SIZE = 128
 
 
 class Transformer(nn.Module):
@@ -33,7 +30,7 @@ class Transformer(nn.Module):
     def forward(self, x, position, mask):
         assert x.size(1) == 1, 'Only 1 token at a time'
 
-        x = self.embed_dropout(self.embed(x) + self.pos_embed(position))
+        x = self.embed_dropout(self.embed(x) + self.pos_embed(x)[:, position, :])
         for layer in self.layers:
             x = layer(x, position, mask)
         return self.out(x)
@@ -49,7 +46,7 @@ class DecoderLayer(nn.Module):
         self.dropout2 = nn.Dropout(config.dropout)
 
         self.self_attn = MultiHeadAttention(config)
-        self.ff = PositionwiseFeedforward(config.d_model, config.d_ff, config.dropout)
+        self.ff = PositionwiseFeedforward(config)
 
     def forward(self, x, position, mask):
         x = self.norm1(x + self.dropout1(self.self_attn(x, position, mask)))
@@ -71,10 +68,11 @@ class MultiHeadAttention(nn.Module):
 
         self.attention = ScaledDotProductAttention()
 
-        self.k_cache = torch.zeros((config.max_batch_size, config.max_len, self.d_model))
-        self.v_cache = torch.zeros((config.max_batch_size, config.max_len, self.d_model))
+        self.k_cache = torch.zeros((MAX_BATCH_SIZE, config.max_len, self.d_model))
+        self.v_cache = torch.zeros((MAX_BATCH_SIZE, config.max_len, self.d_model))
 
     def forward(self, x, position, mask=None):
+        assert x.size(0) <= MAX_BATCH_SIZE, 'Batch size should be less than MAX_BATCH_SIZE'
         assert x.size(1) == 1, 'Only 1 token at a time'
 
         batch_size = x.size(0)
@@ -103,59 +101,3 @@ class MultiHeadAttention(nn.Module):
         )  # (batch_size, seq_len, d_model)
 
         return self.out(concat)
-
-
-class ScaledDotProductAttention(nn.Module):
-    def forward(self, q, k, v, mask=None):
-        # Attention(Q, K, V) = softmax(QK^T / sqrt(d_k))V
-        d_k = q.size(-1)
-        attn = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
-
-        if mask is not None:
-            attn = attn.masked_fill(mask == 0, -1e9)
-
-        attn = torch.softmax(attn, dim=-1)
-        return torch.matmul(attn, v), attn
-
-
-class PositionwiseFeedforward(nn.Module):
-    def __init__(self, d_model, d_ff, dropout):
-        super(PositionwiseFeedforward, self).__init__()
-        self.linear1 = nn.Linear(d_model, d_ff)
-        self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(d_ff, d_model)
-
-    def forward(self, x):
-        x = torch.relu(self.linear1(x))
-        x = self.dropout(x)
-        return self.linear2(x)
-
-
-class LayerNorm(nn.Module):
-    def __init__(self, d_model, eps=1e-6):
-        super(LayerNorm, self).__init__()
-        self.alpha = nn.Parameter(torch.ones(d_model))
-        self.bias = nn.Parameter(torch.zeros(d_model))
-        self.eps = eps
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        return self.alpha * (x - mean) / torch.sqrt(std + self.eps) + self.bias
-
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len):
-        super(PositionalEncoding, self).__init__()
-        self.encoding = torch.zeros(max_len, d_model)
-        for pos in range(max_len):
-            for i in range(0, d_model, 2):
-                location = pos / 10000 ** (i / d_model)
-                self.encoding[pos, i] = math.sin(location)
-                self.encoding[pos, i + 1] = math.cos(location)
-
-        # Add batch dimension. New shape: (1, max_len, d_model)
-        self.encoding = self.encoding.unsqueeze(0)
-
-    def forward(self, position: int):
-        return self.encoding[:, position, :].unsqueeze(1)  # (1, 1, d_model)

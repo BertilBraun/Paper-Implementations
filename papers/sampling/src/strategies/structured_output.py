@@ -45,9 +45,13 @@ def _enforce(
     """
 
     # Find how much of 'text' has already been generated
-    remaining_text = text
-    while generated_text.endswith(remaining_text) and remaining_text:
-        remaining_text = remaining_text[:-1]
+    start_pos = 0
+    for i in range(len(text)):
+        if generated_text.endswith(text[: i + 1]):
+            start_pos = i + 1
+
+    # Remaining text to generate
+    remaining_text = text[start_pos:]
 
     if not remaining_text:
         return logits

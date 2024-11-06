@@ -16,7 +16,7 @@ def top_p_sampling(logits: torch.Tensor, top_p: float) -> torch.Tensor:
 
     indices_to_keep = sorted_indices[sorted_indices_to_keep]
     logits_filtered = logits.clone()
-    logits_filtered[:, ~torch.isin(torch.arange(logits.size(-1)), indices_to_keep)] = float('-inf')
+    logits_filtered[:, ~torch.isin(torch.arange(logits.size(-1)), indices_to_keep)] = -1e9
 
     probabilities = torch.softmax(logits_filtered, dim=-1)
     next_token = torch.multinomial(probabilities, num_samples=1)

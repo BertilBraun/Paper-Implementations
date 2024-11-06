@@ -3,7 +3,7 @@ import torch
 import tiktoken
 from tiktoken_ext.openai_public import ENDOFTEXT
 from torch import nn
-from src.util import load_latest_model
+from papers.attention_is_all_you_need.src.util import load_latest_model
 from papers.sampling.src.decoder_only_transformer import DecoderOnlyTransformer, ModelConfig
 from papers.sampling.src.strategies.top_k import top_k_sampling
 from papers.sampling.src.strategies.top_p import top_p_sampling

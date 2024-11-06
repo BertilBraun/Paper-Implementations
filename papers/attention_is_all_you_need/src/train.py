@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
-from papers.attention_is_all_you_need.src.transformer import Transformer
-from src.dataset import get_tokenizer, prepare_dataloader
-from src.util import create_src_mask, create_tgt_mask, load_latest_model, save_model
+from papers.attention_is_all_you_need.src.transformer import ModelConfig, Transformer
+from papers.attention_is_all_you_need.src.dataset import get_tokenizer, prepare_dataloader
+from papers.attention_is_all_you_need.src.util import create_src_mask, create_tgt_mask, load_latest_model, save_model
 
 
 def train_model(
@@ -149,7 +149,15 @@ if __name__ == '__main__':
     test_dataloader = prepare_dataloader(test_dataset, tokenizer, batch_size=64, shuffle=False)
 
     print('Initializing model...')
-    model = Transformer(vocab_size=tokenizer.get_vocab_size(), d_model=d_model, N=N, heads=heads, d_ff=d_ff)
+    config = ModelConfig(
+        vocab_size=tokenizer.get_vocab_size(),
+        d_model=d_model,
+        N=N,
+        heads=heads,
+        d_ff=d_ff,
+        max_len=512,
+    )
+    model = Transformer(config)
 
     try:
         load_latest_model(model, checkpoint_path)

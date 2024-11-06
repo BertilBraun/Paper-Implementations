@@ -42,24 +42,36 @@ def get_tokenizer(
 
     if not os.path.exists(path):
         print('Training tokenizer...')
-        tokenizer = Tokenizer(models.BPE())
-        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()  # type: ignore
-        trainer = trainers.BpeTrainer(
-            vocab_size=vocab_size,  # type: ignore
-            min_frequency=min_frequency,  # type: ignore
-            special_tokens=special_tokens,  # type: ignore
-        )
-
-        def batch_iterator():
-            for i in range(0, len(train_dataset), 1000):
-                batch = train_dataset[i : i + 1000]['src'] + train_dataset[i : i + 1000]['tgt']
-                yield batch
-
-        tokenizer.train_from_iterator(batch_iterator(), trainer=trainer)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tokenizer.save(path)
+        train_tokenizer(train_dataset, path, vocab_size, min_frequency, special_tokens)
 
     return load_tokenizer(path)
+
+
+def train_tokenizer(
+    train_dataset: Dataset,
+    path: str,
+    vocab_size: int = 37000,
+    min_frequency: int = 2,
+    special_tokens: list = [PAD_TOKEN, END_OF_SRC_TOKEN, END_OF_TGT_TOKEN, BOS_TOKEN, UNK_TOKEN],
+) -> Tokenizer:
+    """Train and return a BPE tokenizer for text processing."""
+    tokenizer = Tokenizer(models.BPE())
+    tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()  # type: ignore
+    trainer = trainers.BpeTrainer(
+        vocab_size=vocab_size,  # type: ignore
+        min_frequency=min_frequency,  # type: ignore
+        special_tokens=special_tokens,  # type: ignore
+    )
+
+    def batch_iterator():
+        for i in range(0, len(train_dataset), 1000):
+            batch = train_dataset[i : i + 1000]['src'] + train_dataset[i : i + 1000]['tgt']
+            yield batch
+
+    tokenizer.train_from_iterator(batch_iterator(), trainer=trainer)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tokenizer.save(path)
+    return tokenizer
 
 
 def load_tokenizer(path='tokenizer.json') -> Tokenizer:

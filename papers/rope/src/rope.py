@@ -2,13 +2,15 @@ import math
 import torch
 from torch import nn
 
+from papers.attention_is_all_you_need.src.transformer import ModelConfig, LayerNorm, PositionwiseFeedforward
+
 
 class RoPETransformer(nn.Module):
-    def __init__(self, vocab_size, d_model, N, heads, d_ff, max_len=512, dropout=0.1):
+    def __init__(self, config: ModelConfig):
         super(RoPETransformer, self).__init__()
-        self.encoder = Encoder(vocab_size, d_model, N, heads, d_ff, max_len, dropout)
-        self.decoder = Decoder(vocab_size, d_model, N, heads, d_ff, max_len, dropout)
-        self.out = nn.Linear(d_model, vocab_size)
+        self.encoder = Encoder(config)
+        self.decoder = Decoder(config)
+        self.out = nn.Linear(config.d_model, config.vocab_size)
 
     def forward(self, src, trg, src_mask, tgt_mask):
         # The src is the source sequence (input to the encoder), and the trg is the target sequence which the decoder should have generated and will be the input to the decoder.
@@ -21,10 +23,10 @@ class RoPETransformer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, vocab_size, d_model, N, heads, d_ff, max_len, dropout):
+    def __init__(self, config: ModelConfig):
         super(Encoder, self).__init__()
-        self.embed = TransformerEmbedding(d_model, vocab_size, dropout)
-        self.layers = nn.ModuleList([EncoderLayer(d_model, heads, d_ff, max_len, dropout) for _ in range(N)])
+        self.embed = TransformerEmbedding(config)
+        self.layers = nn.ModuleList([EncoderLayer(config) for _ in range(config.N)])
 
     def forward(self, src, mask):
         x = self.embed(src)
@@ -34,10 +36,10 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, d_model, N, heads, d_ff, max_len, dropout):
+    def __init__(self, config: ModelConfig):
         super(Decoder, self).__init__()
-        self.embed = TransformerEmbedding(d_model, vocab_size, dropout)
-        self.layers = nn.ModuleList([DecoderLayer(d_model, heads, d_ff, max_len, dropout) for _ in range(N)])
+        self.embed = TransformerEmbedding(config)
+        self.layers = nn.ModuleList([DecoderLayer(config) for _ in range(config.N)])
 
     def forward(self, trg, e_outputs, src_mask, tgt_mask):
         x = self.embed(trg)
@@ -47,16 +49,16 @@ class Decoder(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model, heads, d_ff, max_len, dropout):
+    def __init__(self, config: ModelConfig):
         super(EncoderLayer, self).__init__()
-        self.norm1 = LayerNorm(d_model)
-        self.norm2 = LayerNorm(d_model)
+        self.norm1 = LayerNorm(config.d_model)
+        self.norm2 = LayerNorm(config.d_model)
 
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(config.dropout)
+        self.dropout2 = nn.Dropout(config.dropout)
 
-        self.self_attn = MultiHeadAttention(d_model, heads, max_len)
-        self.ff = PositionwiseFeedforward(d_model, d_ff, dropout)
+        self.self_attn = MultiHeadAttention(config)
+        self.ff = PositionwiseFeedforward(config)
 
     def forward(self, x, mask):
         x = self.norm1(x + self.dropout1(self.self_attn(x, x, x, mask)))
@@ -65,19 +67,19 @@ class EncoderLayer(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model, heads, d_ff, max_len, dropout):
+    def __init__(self, config: ModelConfig):
         super(DecoderLayer, self).__init__()
-        self.norm1 = LayerNorm(d_model)
-        self.norm2 = LayerNorm(d_model)
-        self.norm3 = LayerNorm(d_model)
+        self.norm1 = LayerNorm(config.d_model)
+        self.norm2 = LayerNorm(config.d_model)
+        self.norm3 = LayerNorm(config.d_model)
 
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
-        self.dropout3 = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(config.dropout)
+        self.dropout2 = nn.Dropout(config.dropout)
+        self.dropout3 = nn.Dropout(config.dropout)
 
-        self.self_attn = MultiHeadAttention(d_model, heads, max_len)
-        self.cross_attn = MultiHeadAttention(d_model, heads, max_len)
-        self.ff = PositionwiseFeedforward(d_model, d_ff, dropout)
+        self.self_attn = MultiHeadAttention(config)
+        self.cross_attn = MultiHeadAttention(config)
+        self.ff = PositionwiseFeedforward(config)
 
     def forward(self, x, e_outputs, src_mask, tgt_mask):
         x = self.norm1(x + self.dropout1(self.self_attn(x, x, x, tgt_mask)))
@@ -87,18 +89,18 @@ class DecoderLayer(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model, heads, max_len):
+    def __init__(self, config: ModelConfig):
         super(MultiHeadAttention, self).__init__()
-        self.d_model = d_model
-        self.d_k = d_model // heads
-        self.h = heads
+        self.d_model = config.d_model
+        self.d_k = config.d_model // config.heads
+        self.h = config.heads
 
-        self.q_linear = nn.Linear(d_model, d_model)
-        self.v_linear = nn.Linear(d_model, d_model)
-        self.k_linear = nn.Linear(d_model, d_model)
-        self.out = nn.Linear(d_model, d_model)
+        self.q_linear = nn.Linear(config.d_model, config.d_model)
+        self.v_linear = nn.Linear(config.d_model, config.d_model)
+        self.k_linear = nn.Linear(config.d_model, config.d_model)
+        self.out = nn.Linear(config.d_model, config.d_model)
 
-        self.attention = RoPEScaledDotProductAttention(max_len, self.d_k)
+        self.attention = RoPEScaledDotProductAttention(config.max_len, self.d_k)
 
     def forward(self, q, k, v, mask=None):
         batch_size = q.size(0)
@@ -121,19 +123,19 @@ class MultiHeadAttention(nn.Module):
 
 
 class RoPEScaledDotProductAttention(nn.Module):
-    def __init__(self, max_len, d_k):
+    def __init__(self, max_len: int, d_k: int):
         super(RoPEScaledDotProductAttention, self).__init__()
-        self.dim = d_k  # Should be d_k (dimension per head)
+        self.dim = d_k
         self.max_len = max_len
 
         # Initialize sine and cosine tables
-        self.register_buffer('sin', torch.zeros(max_len, d_k))
-        self.register_buffer('cos', torch.zeros(max_len, d_k))
+        self.register_buffer('sin', torch.zeros(self.max_len, self.dim))
+        self.register_buffer('cos', torch.zeros(self.max_len, self.dim))
 
         # Compute sine and cosine embeddings using nested loops
-        for pos in range(max_len):
-            for i in range(0, d_k, 2):
-                angle = pos / (10000 ** ((2 * (i // 2)) / d_k))
+        for pos in range(self.max_len):
+            for i in range(0, self.dim, 2):
+                angle = pos / (10000 ** ((2 * (i // 2)) / self.dim))
                 self.sin[pos, i] = self.sin[pos, i + 1] = math.sin(angle)
                 self.cos[pos, i] = self.cos[pos, i + 1] = math.cos(angle)
 
@@ -187,37 +189,11 @@ class RoPEScaledDotProductAttention(nn.Module):
         return torch.matmul(attn_weights, v), attn_weights
 
 
-class PositionwiseFeedforward(nn.Module):
-    def __init__(self, d_model, d_ff, dropout):
-        super(PositionwiseFeedforward, self).__init__()
-        self.linear1 = nn.Linear(d_model, d_ff)
-        self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(d_ff, d_model)
-
-    def forward(self, x):
-        x = torch.relu(self.linear1(x))
-        x = self.dropout(x)
-        return self.linear2(x)
-
-
-class LayerNorm(nn.Module):
-    def __init__(self, d_model, eps=1e-6):
-        super(LayerNorm, self).__init__()
-        self.alpha = nn.Parameter(torch.ones(d_model))
-        self.bias = nn.Parameter(torch.zeros(d_model))
-        self.eps = eps
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        return self.alpha * (x - mean) / torch.sqrt(std + self.eps) + self.bias
-
-
 class TransformerEmbedding(nn.Module):
-    def __init__(self, d_model, vocab_size, dropout):
+    def __init__(self, config: ModelConfig):
         super(TransformerEmbedding, self).__init__()
-        self.embed = nn.Embedding(vocab_size, d_model)
-        self.dropout = nn.Dropout(dropout)
+        self.embed = nn.Embedding(config.vocab_size, config.d_model)
+        self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
         return self.dropout(self.embed(x))

@@ -1,9 +1,9 @@
 import torch
 from tokenizers import Tokenizer
 
-from src.dataset import BOS_TOKEN, END_OF_SRC_TOKEN, END_OF_TGT_TOKEN
-from src.util import create_src_mask, create_tgt_mask
-from papers.attention_is_all_you_need.src.transformer import Transformer
+from papers.attention_is_all_you_need.src.dataset import BOS_TOKEN, END_OF_SRC_TOKEN, END_OF_TGT_TOKEN
+from papers.attention_is_all_you_need.src.util import create_src_mask, create_tgt_mask
+from papers.attention_is_all_you_need.src.transformer import ModelConfig, Transformer
 
 
 def generate_sequence(
@@ -38,14 +38,23 @@ def generate_sequence(
 
 if __name__ == '__main__':
     from papers.attention_is_all_you_need.src.transformer import Transformer
-    from src.dataset import load_tokenizer
-    from src.util import load_latest_model
+    from papers.attention_is_all_you_need.src.dataset import load_tokenizer
+    from papers.attention_is_all_you_need.src.util import load_latest_model
 
     data_dir = 'papers/attention_is_all_you_need/data'
 
     tokenizer = load_tokenizer(f'{data_dir}/tokenizer.json')
 
-    model = Transformer(vocab_size=tokenizer.get_vocab_size(), d_model=512, N=6, heads=8, d_ff=2048)
+    config = ModelConfig(
+        vocab_size=tokenizer.get_vocab_size(),
+        d_model=512,
+        N=6,
+        heads=8,
+        d_ff=2048,
+        max_len=512,
+        dropout=0.1,
+    )
+    model = Transformer(config)
     model: Transformer = load_latest_model(model, f'{data_dir}/checkpoints')  # type: ignore
 
     src_sequence = 'Once upon a time'

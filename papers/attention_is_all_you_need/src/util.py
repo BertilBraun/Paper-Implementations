@@ -3,7 +3,7 @@ import re
 from tokenizers import Tokenizer
 import torch
 
-from src.dataset import PAD_TOKEN
+from papers.attention_is_all_you_need.src.dataset import PAD_TOKEN
 
 
 def create_src_mask(src_batch: torch.Tensor, tokenizer: Tokenizer, device: torch.device) -> torch.Tensor:

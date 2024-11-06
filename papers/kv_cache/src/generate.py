@@ -1,22 +1,21 @@
+import tiktoken
+from tiktoken_ext.openai_public import ENDOFTEXT
 import torch
-from tokenizers import Tokenizer
 
-from src.util import load_latest_model
-from src.dataset import BOS_TOKEN, END_OF_TGT_TOKEN, load_tokenizer
 from papers.kv_cache.src.kv_cache import Transformer, ModelConfig
 
 
 def generate_sequence(
     model: Transformer,
     src_sequence: str,
-    tokenizer: Tokenizer,
+    tokenizer: tiktoken.Encoding,
     max_length=50,
 ) -> str:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     model.eval()
     with torch.no_grad():
-        ys = torch.tensor([tokenizer.encode(BOS_TOKEN + src_sequence).ids], dtype=torch.long, device=device)
+        ys = torch.tensor([tokenizer.encode(src_sequence)], dtype=torch.long, device=device)
 
         for i, token in enumerate(ys[0:-1].tolist()):
             _ = model(torch.tensor([[token]], dtype=torch.long, device=device), i, mask=None)
@@ -26,7 +25,7 @@ def generate_sequence(
 
             next_word = torch.argmax(out, dim=2).item()  # Greedy decoding
 
-            if next_word == tokenizer.token_to_id(END_OF_TGT_TOKEN):
+            if next_word == tokenizer.encode_single_token(ENDOFTEXT):
                 break
 
             ys = torch.cat([ys, torch.tensor([[next_word]], dtype=torch.long, device=device)], dim=1)
@@ -39,10 +38,10 @@ def generate_sequence(
 if __name__ == '__main__':
     data_dir = 'papers/kv_cache/data'
 
-    tokenizer = load_tokenizer(f'{data_dir}/tokenizer.json')
+    tokenizer = tiktoken.get_encoding('cl100k_base')
 
     config = ModelConfig(
-        vocab_size=tokenizer.get_vocab_size(),
+        vocab_size=tokenizer.max_token_value + 1,
         d_model=512,
         N=6,
         heads=8,
@@ -52,10 +51,6 @@ if __name__ == '__main__':
     )
 
     model = Transformer(config)
-    try:
-        model: Transformer = load_latest_model(model, f'{data_dir}/checkpoints')  # type: ignore
-    except FileNotFoundError:
-        pass
 
     src_sequence = 'Once upon a time'
     generated_sequence = generate_sequence(model, src_sequence, tokenizer)

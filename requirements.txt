@@ -8,3 +8,4 @@ tqdm
 pandas
 numpy
 tokenizers
+tiktoken

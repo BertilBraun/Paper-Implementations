@@ -18,6 +18,12 @@ In language generation tasks, selecting the next word in a sequence is crucial f
 
 - **Structured Output Sampling**: This method allows you to enforce a specific structure in the generated text by filtering the model's logits before sampling. This ensures that the output adheres to predefined formatting constraints, which is particularly useful when generating text that must follow a certain template or protocol. The structured output filtering method modifies the logits output by the model at each time step to enforce the desired structure.
 
+```
+Pydantic model  →  internal schema  →  grammar-constrained sampler → JSON text (valid for the schema)  →  Pydantic model instance
+```
+
+- **Structured JSON Output Sampling**: Uses a `StreamingJSONValidator` to enforce schema-conforming JSON during generation. It binds to Pydantic models, generating only text that will deserialize correctly. This ensures schema-compliant outputs without post-hoc correction. See `structured_json_output.py` and `schema_validator.py`.
+
 ## Repository Structure
 
 - `src/`: Source code for the sampling strategies.
@@ -29,6 +35,8 @@ In language generation tasks, selecting the next word in a sequence is crucial f
     - `top_p.py`: Implementation of nucleus (top-P) sampling.
     - `beam_search.py`: Implementation of beam search.
     - `structured_output.py`: Implementation of the structured output filtering method.
+    - `structured_json_output.py`: Pydantic-driven structured generation using the StreamingJSONValidator.
+    - `schema_validator.py`: Incremental JSON validator supporting per-character validation against schema.
 - `data/`: Directory for tokenizer files and any required datasets.
 
 ## Prerequisites
@@ -43,13 +51,21 @@ To test the different sampling strategies, run the `sampling.py` script:
 python -m papers.sampling.src.sampling
 ```
 
-The script initializes the model and tokenizer, then generates text using each of the implemented sampling methods. The generated text for each strategy will be printed to the console.
+To try structured JSON sampling based on a Pydantic model:
+
+```sh
+python -m papers.sampling.src.strategies.structured_json_output
+```
 
 ## Notes
 
 - The model used is a decoder-only Transformer similar to GPT models.
 - Adjust the hyperparameters and sampling parameters in the script to experiment with different settings.
 - The structured output sampling demonstrates how to guide the model's output format without retraining.
+- The structured JSON sampling (`structured_json_output.py`) is a powerful, grammar-constrained generation method, but **may be slow for string fields** due to high token branching. Optimization suggestions include:
+  - Compiling schema rules to more efficient forms.
+  - Parallelizing token filtering (easy, embarrassingly parallel).
+  - Implementing the filtering logic in C++/Rust/CUDA for GPU acceleration.
 
 ## References
 

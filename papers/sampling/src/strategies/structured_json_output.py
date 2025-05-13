@@ -64,7 +64,6 @@ def allowed_token_ids(pv: StreamingJSONValidator, root: TrieNode) -> List[int]:
                 continue
             stack.append((child, new_state))
 
-    print(f'Tested {tested} nodes out of {len(TOK2ID)}')
     return allowed
 
 
@@ -81,7 +80,6 @@ def sample_json(schema: SchemaNode, max_steps: int) -> str:
     out: List[str] = []
 
     for _ in range(max_steps):
-        print((''.join(out)).split('\n')[-1])
         ids = allowed_token_ids(pv, TRIE_ROOT)
         tid = int(RNG.choice(ids))
         tok = ID2TOK[tid]

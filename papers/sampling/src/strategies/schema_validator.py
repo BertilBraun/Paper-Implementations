@@ -17,7 +17,7 @@ optional keys—is local and independent.
 from dataclasses import dataclass
 from typing import Mapping, Union, List, Optional, Literal
 
-DEBUG = True  # set to False to disable output restrictions
+DEBUG = False  # set to False to disable output restrictions
 
 # ── Schema model ──────────────────────────────────────────────────────────────
 
